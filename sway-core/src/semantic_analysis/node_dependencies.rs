@@ -345,6 +345,7 @@ impl Dependencies {
                     TraitItem::Constant(const_decl) => {
                         deps.gather_from_constant_decl(engines, const_decl)
                     }
+                    TraitItem::Type(type_decl) => deps.gather_from_type_decl(engines, type_decl),
                 })
                 .gather_from_iter(methods.iter(), |deps, fn_decl| {
                     deps.gather_from_fn_decl(engines, fn_decl)
@@ -364,6 +365,7 @@ impl Dependencies {
                     ImplItem::Constant(const_decl) => {
                         deps.gather_from_constant_decl(engines, const_decl)
                     }
+                    ImplItem::Type(type_decl) => deps.gather_from_type_decl(engines, type_decl),
                 }),
             Declaration::ImplSelf(ImplSelf {
                 implementing_for,
@@ -376,6 +378,7 @@ impl Dependencies {
                     ImplItem::Constant(const_decl) => {
                         deps.gather_from_constant_decl(engines, const_decl)
                     }
+                    ImplItem::Type(type_decl) => deps.gather_from_type_decl(engines, type_decl),
                 }),
             Declaration::AbiDeclaration(AbiDeclaration {
                 interface_surface,
@@ -395,6 +398,7 @@ impl Dependencies {
                     TraitItem::Constant(const_decl) => {
                         deps.gather_from_constant_decl(engines, const_decl)
                     }
+                    TraitItem::Type(type_decl) => deps.gather_from_type_decl(engines, type_decl),
                 })
                 .gather_from_iter(methods.iter(), |deps, fn_decl| {
                     deps.gather_from_fn_decl(engines, fn_decl)
@@ -429,6 +433,14 @@ impl Dependencies {
             Some(value) => self
                 .gather_from_type_argument(engines, type_ascription)
                 .gather_from_expr(engines, value),
+            None => self,
+        }
+    }
+
+    fn gather_from_type_decl(self, engines: &Engines, type_decl: &TraitTypeDeclaration) -> Self {
+        let TraitTypeDeclaration { ty_opt, .. } = type_decl;
+        match ty_opt {
+            Some(value) => self.gather_from_type_argument(engines, value),
             None => self,
         }
     }
@@ -811,6 +823,7 @@ fn decl_name(type_engine: &TypeEngine, decl: &Declaration) -> Option<DependentSy
                     .map(|item| match item {
                         ImplItem::Fn(fn_decl) => fn_decl.name.as_str(),
                         ImplItem::Constant(const_decl) => const_decl.name.as_str(),
+                        ImplItem::Type(type_decl) => type_decl.name.as_str(),
                     })
                     .collect::<Vec<&str>>()
                     .join(""),
@@ -826,6 +839,7 @@ fn decl_name(type_engine: &TypeEngine, decl: &Declaration) -> Option<DependentSy
                         .map(|item| match item {
                             ImplItem::Fn(fn_decl) => fn_decl.name.as_str(),
                             ImplItem::Constant(const_decl) => const_decl.name.as_str(),
+                            ImplItem::Type(type_decl) => type_decl.name.as_str(),
                         })
                         .collect::<Vec<&str>>()
                         .join(""),
@@ -881,6 +895,7 @@ fn type_info_name(type_info: &TypeInfo) -> String {
         TypeInfo::Ptr(..) => "__ptr",
         TypeInfo::Slice(..) => "__slice",
         TypeInfo::Alias { .. } => "alias",
+        TypeInfo::TraitType { .. } => "trait type",
     }
     .to_string()
 }

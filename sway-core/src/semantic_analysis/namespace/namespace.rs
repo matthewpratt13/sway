@@ -102,19 +102,22 @@ impl Namespace {
     pub(crate) fn resolve_symbol(
         &self,
         handler: &Handler,
+        engines: &Engines,
         symbol: &Ident,
-    ) -> Result<&ty::TyDecl, ErrorEmitted> {
-        self.root.resolve_symbol(handler, &self.mod_path, symbol)
+    ) -> Result<ty::TyDecl, ErrorEmitted> {
+        self.root
+            .resolve_symbol(handler, engines, &self.mod_path, symbol)
     }
 
     /// Short-hand for calling [Root::resolve_call_path] on `root` with the `mod_path`.
     pub(crate) fn resolve_call_path(
         &self,
         handler: &Handler,
+        engines: &Engines,
         call_path: &CallPath,
-    ) -> Result<&ty::TyDecl, ErrorEmitted> {
+    ) -> Result<ty::TyDecl, ErrorEmitted> {
         self.root
-            .resolve_call_path(handler, &self.mod_path, call_path)
+            .resolve_call_path(handler, engines, &self.mod_path, call_path)
     }
 
     /// Short-hand for calling [Root::resolve_call_path_with_visibility_check] on `root` with the `mod_path`.
@@ -123,7 +126,7 @@ impl Namespace {
         handler: &Handler,
         engines: &Engines,
         call_path: &CallPath,
-    ) -> Result<&ty::TyDecl, ErrorEmitted> {
+    ) -> Result<ty::TyDecl, ErrorEmitted> {
         self.root.resolve_call_path_with_visibility_check(
             handler,
             engines,
@@ -172,6 +175,7 @@ impl Namespace {
             handler,
             engines,
             type_id,
+            None,
             span,
             EnforceTypeArguments::Yes,
             type_info_prefix,
@@ -215,6 +219,7 @@ impl Namespace {
                 handler,
                 engines,
                 type_id,
+                Some(self_type),
                 &item_name.span(),
                 EnforceTypeArguments::No,
                 None,
@@ -242,6 +247,11 @@ impl Namespace {
                     }
                 }
                 ty::TyTraitItem::Constant(decl_ref) => {
+                    if decl_ref.name() == item_name {
+                        matching_item_decl_refs.push(item.clone());
+                    }
+                }
+                ty::TyTraitItem::Type(decl_ref) => {
                     if decl_ref.name() == item_name {
                         matching_item_decl_refs.push(item.clone());
                     }
@@ -298,6 +308,7 @@ impl Namespace {
             .flat_map(|item| match item {
                 ty::TyTraitItem::Fn(decl_ref) => Some(decl_ref),
                 ty::TyTraitItem::Constant(_) => None,
+                ty::TyTraitItem::Type(_) => None,
             })
             .collect::<Vec<_>>();
 
@@ -528,6 +539,7 @@ impl Namespace {
             .flat_map(|item| match item {
                 ty::TyTraitItem::Fn(_decl_ref) => None,
                 ty::TyTraitItem::Constant(decl_ref) => Some(decl_ref),
+                ty::TyTraitItem::Type(_decl_ref) => None,
             })
             .collect::<Vec<_>>();
 
@@ -665,6 +677,7 @@ impl Namespace {
         impl_span: &Span,
         trait_decl_span: Option<Span>,
         is_impl_self: bool,
+        is_extending: bool,
         engines: &Engines,
     ) -> Result<(), ErrorEmitted> {
         // Use trait name with full path, improves consistency between
@@ -680,6 +693,7 @@ impl Namespace {
             impl_span,
             trait_decl_span,
             is_impl_self,
+            is_extending,
             engines,
         )
     }

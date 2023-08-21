@@ -72,6 +72,8 @@ pub enum CompileError {
     MultipleDefinitionsOfName { name: Ident, span: Span },
     #[error("Constant \"{name}\" was already defined in scope.")]
     MultipleDefinitionsOfConstant { name: Ident, span: Span },
+    #[error("Type \"{name}\" was already defined in scope.")]
+    MultipleDefinitionsOfType { name: Ident, span: Span },
     #[error("Assignment to immutable variable. Variable {name} is not declared as mutable.")]
     AssignmentToNonMutable { name: Ident, span: Span },
     #[error(
@@ -131,6 +133,12 @@ pub enum CompileError {
     },
     #[error("Constant \"{name}\" is not a part of {interface_name}'s interface surface.")]
     ConstantNotAPartOfInterfaceSurface {
+        name: Ident,
+        interface_name: InterfaceName,
+        span: Span,
+    },
+    #[error("Type \"{name}\" is not a part of {interface_name}'s interface surface.")]
+    TypeNotAPartOfInterfaceSurface {
         name: Ident,
         interface_name: InterfaceName,
         span: Span,
@@ -703,6 +711,7 @@ impl Spanned for CompileError {
             MultipleDefinitionsOfFunction { span, .. } => span.clone(),
             MultipleDefinitionsOfName { span, .. } => span.clone(),
             MultipleDefinitionsOfConstant { span, .. } => span.clone(),
+            MultipleDefinitionsOfType { span, .. } => span.clone(),
             AssignmentToNonMutable { span, .. } => span.clone(),
             MutableParameterNotSupported { span, .. } => span.clone(),
             ImmutableArgumentToMutableParameter { span } => span.clone(),
@@ -714,6 +723,7 @@ impl Spanned for CompileError {
             UnknownTrait { span, .. } => span.clone(),
             FunctionNotAPartOfInterfaceSurface { span, .. } => span.clone(),
             ConstantNotAPartOfInterfaceSurface { span, .. } => span.clone(),
+            TypeNotAPartOfInterfaceSurface { span, .. } => span.clone(),
             MissingInterfaceSurfaceConstants { span, .. } => span.clone(),
             MissingInterfaceSurfaceMethods { span, .. } => span.clone(),
             IncorrectNumberOfTypeArguments { span, .. } => span.clone(),

@@ -123,7 +123,7 @@ impl ty::TyExpression {
                 };
                 if matches!(
                     ctx.namespace
-                        .resolve_call_path(&Handler::default(), &call_path)
+                        .resolve_call_path(&Handler::default(), engines, &call_path)
                         .ok(),
                     Some(ty::TyDecl::EnumVariantDecl { .. })
                 ) {
@@ -432,7 +432,7 @@ impl ty::TyExpression {
 
         let exp = match ctx
             .namespace
-            .resolve_symbol(&Handler::default(), &name)
+            .resolve_symbol(&Handler::default(), engines, &name)
             .ok()
         {
             Some(ty::TyDecl::VariableDecl(decl)) => {
@@ -441,13 +441,13 @@ impl ty::TyExpression {
                     mutability,
                     return_type,
                     ..
-                } = &**decl;
+                } = *decl;
                 ty::TyExpression {
-                    return_type: *return_type,
+                    return_type,
                     expression: ty::TyExpressionVariant::VariableExpression {
                         name: decl_name.clone(),
                         span: name.span(),
-                        mutability: *mutability,
+                        mutability,
                         call_path: Some(
                             CallPath::from(decl_name.clone()).to_fullpath(ctx.namespace),
                         ),
@@ -456,7 +456,7 @@ impl ty::TyExpression {
                 }
             }
             Some(ty::TyDecl::ConstantDecl(ty::ConstantDecl { decl_id, .. })) => {
-                let const_decl = decl_engine.get_constant(decl_id);
+                let const_decl = decl_engine.get_constant(&decl_id);
                 let decl_name = const_decl.name().clone();
                 ty::TyExpression {
                     return_type: const_decl.return_type,
@@ -469,7 +469,7 @@ impl ty::TyExpression {
                 }
             }
             Some(ty::TyDecl::AbiDecl(ty::AbiDecl { decl_id, .. })) => {
-                let decl = decl_engine.get_abi(decl_id);
+                let decl = decl_engine.get_abi(&decl_id);
                 ty::TyExpression {
                     return_type: decl.create_type_id(engines),
                     expression: ty::TyExpressionVariant::AbiName(AbiName::Known(decl.name.into())),
@@ -862,6 +862,7 @@ impl ty::TyExpression {
         // Search for the struct declaration with the call path above.
         let storage_key_decl_opt = ctx.namespace.root().resolve_symbol(
             handler,
+            engines,
             &storage_key_mod_path,
             &storage_key_ident,
         )?;
@@ -941,7 +942,8 @@ impl ty::TyExpression {
         args: Vec<Expression>,
         qualified_path_root: Option<QualifiedPathRootTypes>,
     ) -> Result<ty::TyExpression, ErrorEmitted> {
-        let decl_engine = ctx.engines.de();
+        let engines = ctx.engines;
+        let decl_engine = engines.de();
 
         if let Some(QualifiedPathRootTypes { ty, as_trait, .. }) = qualified_path_root {
             if !prefixes.is_empty() || before.is_some() {
@@ -988,8 +990,11 @@ impl ty::TyExpression {
                 span: path_span,
             };
             if matches!(
-                ctx.namespace
-                    .resolve_call_path(&Handler::default(), &call_path_binding.inner),
+                ctx.namespace.resolve_call_path(
+                    &Handler::default(),
+                    engines,
+                    &call_path_binding.inner
+                ),
                 Ok(ty::TyDecl::EnumVariantDecl { .. })
             ) {
                 return Self::type_check_delineated_path(
@@ -1028,7 +1033,7 @@ impl ty::TyExpression {
                 is_absolute,
             };
             ctx.namespace
-                .resolve_call_path(&Handler::default(), &probe_call_path)
+                .resolve_call_path(&Handler::default(), engines, &probe_call_path)
                 .and_then(|decl| decl.to_enum_ref(&Handler::default(), ctx.engines()))
                 .map(|decl_ref| decl_engine.get_enum(&decl_ref))
                 .and_then(|decl| {
@@ -1332,8 +1337,7 @@ impl ty::TyExpression {
         // look up the call path and get the declaration it references
         let abi = ctx
             .namespace
-            .resolve_call_path(handler, &abi_name)
-            .cloned()?;
+            .resolve_call_path(handler, engines, &abi_name)?;
         let abi_ref = match abi {
             ty::TyDecl::AbiDecl(ty::AbiDecl {
                 name,
@@ -1357,8 +1361,7 @@ impl ty::TyExpression {
                     AbiName::Known(abi_name) => {
                         let unknown_decl = ctx
                             .namespace
-                            .resolve_call_path(handler, &abi_name)
-                            .cloned()?;
+                            .resolve_call_path(handler, engines, &abi_name)?;
                         unknown_decl.to_abi_ref(handler)?
                     }
                     AbiName::Deferred => {
@@ -1419,6 +1422,10 @@ impl ty::TyExpression {
                     let const_decl = decl_engine.get_constant(&decl_ref);
                     abi_items.push(TyImplItem::Constant(decl_engine.insert(const_decl)));
                 }
+                ty::TyTraitInterfaceItem::Type(decl_ref) => {
+                    let type_decl = decl_engine.get_type(&decl_ref);
+                    abi_items.push(TyImplItem::Type(decl_engine.insert(type_decl)));
+                }
             }
         }
 
@@ -1444,6 +1451,7 @@ impl ty::TyExpression {
             &abi_items,
             &span,
             Some(span.clone()),
+            false,
             false,
             engines,
         )?;
@@ -1701,7 +1709,7 @@ impl ty::TyExpression {
                         ExpressionKind::Variable(name) => {
                             // check that the reassigned name exists
                             let unknown_decl =
-                                ctx.namespace.resolve_symbol(handler, &name).cloned()?;
+                                ctx.namespace.resolve_symbol(handler, engines, &name)?;
                             let variable_decl = unknown_decl.expect_variable(handler).cloned()?;
                             if !variable_decl.mutability.is_mutable() {
                                 return Err(handler.emit_err(

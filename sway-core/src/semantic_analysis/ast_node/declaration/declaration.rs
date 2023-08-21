@@ -117,8 +117,7 @@ impl ty::TyDecl {
                 for supertrait in trait_decl.supertraits.iter_mut() {
                     let _ = ctx
                         .namespace
-                        .resolve_call_path(handler, &supertrait.name)
-                        .cloned()
+                        .resolve_call_path(handler, engines, &supertrait.name)
                         .map(|supertrait_decl| {
                             if let ty::TyDecl::TraitDecl(ty::TraitDecl {
                                 name: supertrait_name,
@@ -159,11 +158,9 @@ impl ty::TyDecl {
                 // insert those since we do not allow calling contract methods
                 // from contract methods
                 let emp_vec = vec![];
-                let impl_trait_items = if let Some(ty::TyDecl::TraitDecl { .. }) = ctx
+                let impl_trait_items = if let Ok(ty::TyDecl::TraitDecl { .. }) = ctx
                     .namespace
-                    .resolve_call_path(&Handler::default(), &impl_trait.trait_name)
-                    .ok()
-                    .cloned()
+                    .resolve_call_path(&Handler::default(), engines, &impl_trait.trait_name)
                 {
                     &impl_trait.items
                 } else {
@@ -180,6 +177,7 @@ impl ty::TyDecl {
                         .trait_decl_ref
                         .as_ref()
                         .map(|decl_ref| decl_ref.decl_span().clone()),
+                    false,
                     false,
                     engines,
                 )?;
@@ -208,6 +206,7 @@ impl ty::TyDecl {
                         .as_ref()
                         .map(|decl_ref| decl_ref.decl_span().clone()),
                     true,
+                    false,
                     engines,
                 )?;
                 let impl_trait_decl: ty::TyDecl = decl_engine.insert(impl_trait.clone()).into();
@@ -245,8 +244,7 @@ impl ty::TyDecl {
                 for supertrait in abi_decl.supertraits.iter_mut() {
                     let _ = ctx
                         .namespace
-                        .resolve_call_path(handler, &supertrait.name)
-                        .cloned()
+                        .resolve_call_path(handler, engines, &supertrait.name)
                         .map(|supertrait_decl| {
                             if let ty::TyDecl::TraitDecl(ty::TraitDecl {
                                 name: supertrait_name,

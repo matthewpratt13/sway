@@ -155,6 +155,7 @@ impl TypeEngine {
                             handler,
                             engines,
                             type_argument.type_id,
+                            None,
                             &type_argument.span,
                             enforce_type_arguments,
                             None,
@@ -306,7 +307,8 @@ impl TypeEngine {
             | TypeInfo::Storage { .. }
             | TypeInfo::RawUntypedPtr
             | TypeInfo::RawUntypedSlice
-            | TypeInfo::Alias { .. } => false,
+            | TypeInfo::Alias { .. }
+            | TypeInfo::TraitType { .. } => false,
             TypeInfo::Numeric => true,
         }
     }
@@ -359,7 +361,8 @@ impl TypeEngine {
             | TypeInfo::Storage { .. }
             | TypeInfo::RawUntypedPtr
             | TypeInfo::RawUntypedSlice
-            | TypeInfo::Alias { .. } => {}
+            | TypeInfo::Alias { .. }
+            | TypeInfo::TraitType { .. } => {}
             TypeInfo::Numeric => {
                 self.unify(
                     handler,
@@ -384,6 +387,7 @@ impl TypeEngine {
         handler: &Handler,
         engines: &Engines,
         type_id: TypeId,
+        self_type: Option<TypeId>,
         span: &Span,
         enforce_type_arguments: EnforceTypeArguments,
         type_info_prefix: Option<&Path>,
@@ -399,14 +403,14 @@ impl TypeEngine {
             } => {
                 match namespace
                     .root()
-                    .resolve_call_path_with_visibility_check(
+                    .resolve_call_path_with_self_with_visibility_check(
                         handler,
                         engines,
                         module_path,
                         &call_path,
+                        self_type,
                     )
                     .ok()
-                    .cloned()
                 {
                     Some(ty::TyDecl::StructDecl(ty::StructDecl {
                         decl_id: original_id,
@@ -487,6 +491,32 @@ impl TypeEngine {
                     Some(ty::TyDecl::GenericTypeForFunctionScope(
                         ty::GenericTypeForFunctionScope { type_id, .. },
                     )) => type_id,
+                    Some(ty::TyDecl::TypeDecl(ty::TypeDecl {
+                        decl_id,
+                        name,
+                        decl_span,
+                    })) => {
+                        let decl_type = decl_engine.get_type(&decl_id);
+
+                        if let Some(ty) = decl_type.ty {
+                            ty.type_id
+                        } else {
+                            if let Some(self_type) = self_type {
+                                self.insert(
+                                    engines,
+                                    TypeInfo::TraitType {
+                                        name,
+                                        trait_type_id: self_type,
+                                    },
+                                )
+                            } else {
+                                return Err(handler.emit_err(CompileError::Internal(
+                                    "Self type not specified",
+                                    decl_span,
+                                )));
+                            }
+                        }
+                    }
                     _ => {
                         let err = handler.emit_err(CompileError::UnknownTypeName {
                             name: call_path.to_string(),
@@ -502,6 +532,7 @@ impl TypeEngine {
                         handler,
                         engines,
                         elem_ty.type_id,
+                        self_type,
                         span,
                         enforce_type_arguments,
                         None,
@@ -524,6 +555,7 @@ impl TypeEngine {
                             handler,
                             engines,
                             type_argument.type_id,
+                            self_type,
                             span,
                             enforce_type_arguments,
                             None,
@@ -537,6 +569,30 @@ impl TypeEngine {
 
                 // take any trait methods that apply to this type and copy them to the new type
                 namespace.insert_trait_implementation_for_type(engines, type_id);
+
+                type_id
+            }
+            TypeInfo::TraitType {
+                name,
+                trait_type_id,
+            } => {
+                for trait_item in namespace
+                    .implemented_traits
+                    .get_items_for_type(engines, trait_type_id)
+                {
+                    match trait_item {
+                        ty::TyTraitItem::Fn(_) => {}
+                        ty::TyTraitItem::Constant(_) => {}
+                        ty::TyTraitItem::Type(type_ref) => {
+                            let type_decl = engines.de().get_type(type_ref.id());
+                            if type_decl.name.as_str() == name.as_str() {
+                                if let Some(ty) = type_decl.ty {
+                                    return Ok(ty.type_id);
+                                }
+                            }
+                        }
+                    }
+                }
 
                 type_id
             }
@@ -565,6 +621,7 @@ impl TypeEngine {
             handler,
             engines,
             type_id,
+            Some(self_type),
             span,
             enforce_type_arguments,
             type_info_prefix,

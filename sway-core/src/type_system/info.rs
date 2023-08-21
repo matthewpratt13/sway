@@ -153,6 +153,10 @@ pub enum TypeInfo {
         name: Ident,
         ty: TypeArgument,
     },
+    TraitType {
+        name: Ident,
+        trait_type_id: TypeId,
+    },
 }
 
 impl HashWithEngines for TypeInfo {
@@ -218,6 +222,13 @@ impl HashWithEngines for TypeInfo {
             }
             TypeInfo::Slice(ty) => {
                 ty.hash(state, engines);
+            }
+            TypeInfo::TraitType {
+                name,
+                trait_type_id,
+            } => {
+                name.hash(state);
+                trait_type_id.hash(state);
             }
             TypeInfo::Numeric
             | TypeInfo::Boolean
@@ -325,6 +336,21 @@ impl PartialEqWithEngines for TypeInfo {
                         .get(l_ty.type_id)
                         .eq(&type_engine.get(r_ty.type_id), engines)
             }
+            (
+                TypeInfo::TraitType {
+                    name: l_name,
+                    trait_type_id: l_trait_type_id,
+                },
+                TypeInfo::TraitType {
+                    name: r_name,
+                    trait_type_id: r_trait_type_id,
+                },
+            ) => {
+                l_name == r_name
+                    && type_engine
+                        .get(l_trait_type_id.clone())
+                        .eq(&type_engine.get(r_trait_type_id.clone()), engines)
+            }
             (l, r) => l.discriminant_value() == r.discriminant_value(),
         }
     }
@@ -415,6 +441,18 @@ impl OrdWithEngines for TypeInfo {
                 .get(l_ty.type_id)
                 .cmp(&type_engine.get(r_ty.type_id), engines)
                 .then_with(|| l_name.cmp(r_name)),
+            (
+                Self::TraitType {
+                    name: l_name,
+                    trait_type_id: l_trait_type_id,
+                },
+                Self::TraitType {
+                    name: r_name,
+                    trait_type_id: r_trait_type_id,
+                },
+            ) => l_trait_type_id
+                .cmp(r_trait_type_id)
+                .then_with(|| l_name.cmp(r_name)),
 
             (l, r) => l.discriminant_value().cmp(&r.discriminant_value()),
         }
@@ -482,6 +520,10 @@ impl DisplayWithEngines for TypeInfo {
                 format!("__slice[{}]", engines.help_out(ty))
             }
             Alias { name, .. } => name.to_string(),
+            TraitType {
+                name,
+                trait_type_id,
+            } => format!("trait type {}::{}", engines.help_out(trait_type_id), name),
         };
         write!(f, "{s}")
     }
@@ -561,6 +603,10 @@ impl DebugWithEngines for TypeInfo {
             Alias { name, ty } => {
                 format!("type {} = {:?}", name, engines.help_out(ty))
             }
+            TraitType {
+                name,
+                trait_type_id,
+            } => format!("trait type {}::{}", engines.help_out(trait_type_id), name),
         };
         write!(f, "{s}")
     }
@@ -597,6 +643,7 @@ impl TypeInfo {
             TypeInfo::Alias { .. } => 21,
             TypeInfo::Ptr(..) => 22,
             TypeInfo::Slice(..) => 23,
+            TypeInfo::TraitType { .. } => 24,
         }
     }
 
@@ -958,7 +1005,8 @@ impl TypeInfo {
             | TypeInfo::Storage { .. }
             | TypeInfo::Placeholder(_)
             | TypeInfo::TypeParam(_)
-            | TypeInfo::Alias { .. } => {
+            | TypeInfo::Alias { .. }
+            | TypeInfo::TraitType { .. } => {
                 Err(handler.emit_err(CompileError::TypeArgumentsNotAllowed { span: span.clone() }))
             }
         }
@@ -1016,7 +1064,8 @@ impl TypeInfo {
             | TypeInfo::Array(_, _)
             | TypeInfo::Storage { .. }
             | TypeInfo::Placeholder(_)
-            | TypeInfo::TypeParam(_) => Err(handler.emit_err(CompileError::Unimplemented(
+            | TypeInfo::TypeParam(_)
+            | TypeInfo::TraitType { .. } => Err(handler.emit_err(CompileError::Unimplemented(
                 "matching on this type is unsupported right now",
                 span.clone(),
             ))),
@@ -1048,7 +1097,8 @@ impl TypeInfo {
             | TypeInfo::Contract
             | TypeInfo::Numeric
             | TypeInfo::Alias { .. }
-            | TypeInfo::UnknownGeneric { .. } => Ok(()),
+            | TypeInfo::UnknownGeneric { .. }
+            | TypeInfo::TraitType { .. } => Ok(()),
             TypeInfo::Unknown
             | TypeInfo::ContractCaller { .. }
             | TypeInfo::SelfType
@@ -1111,7 +1161,8 @@ impl TypeInfo {
             | TypeInfo::B256
             | TypeInfo::Numeric
             | TypeInfo::Contract
-            | TypeInfo::ErrorRecovery(_) => {}
+            | TypeInfo::ErrorRecovery(_)
+            | TypeInfo::TraitType { .. } => {}
             TypeInfo::Enum(enum_ref) => {
                 let enum_decl = decl_engine.get_enum(enum_ref);
                 for type_param in enum_decl.type_parameters.iter() {
@@ -1362,7 +1413,8 @@ impl TypeInfo {
             | TypeInfo::RawUntypedSlice
             | TypeInfo::Ptr(..)
             | TypeInfo::Slice(..)
-            | TypeInfo::ErrorRecovery(_) => false,
+            | TypeInfo::ErrorRecovery(_)
+            | TypeInfo::TraitType { .. } => false,
             TypeInfo::Unknown
             | TypeInfo::UnknownGeneric { .. }
             | TypeInfo::ContractCaller { .. }

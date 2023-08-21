@@ -1,7 +1,7 @@
 use crate::{Parse, ParseBracket, ParseResult, Parser};
 
 use sway_ast::attribute::Annotated;
-use sway_ast::keywords::{ConstToken, FnToken, OpenAngleBracketToken, WhereToken};
+use sway_ast::keywords::{ConstToken, FnToken, OpenAngleBracketToken, TypeToken, WhereToken};
 use sway_ast::{Braces, ItemFn, ItemTrait, ItemTraitItem, PubToken, Traits};
 use sway_error::parser_error::ParseErrorKind;
 
@@ -13,6 +13,9 @@ impl Parse for ItemTraitItem {
         } else if let Some(_const_keyword) = parser.peek::<ConstToken>() {
             let const_decl = parser.parse()?;
             Ok(ItemTraitItem::Const(const_decl))
+        } else if let Some(_type_keyword) = parser.peek::<TypeToken>() {
+            let type_decl = parser.parse()?;
+            Ok(ItemTraitItem::Type(type_decl))
         } else {
             Err(parser.emit_error(ParseErrorKind::ExpectedAnItem))
         }

@@ -23,7 +23,7 @@ use sway_core::{
             Scrutinee, StorageAccessExpression, StorageDeclaration, StorageField,
             StructDeclaration, StructExpression, StructExpressionField, StructField,
             StructScrutineeField, SubfieldExpression, Supertrait, TraitDeclaration, TraitFn,
-            TraitItem, TupleIndexExpression, TypeAliasDeclaration, UseStatement,
+            TraitItem, TupleIndexExpression, TypeAliasDeclaration, TypeDeclaration, UseStatement,
             VariableDeclaration, WhileLoopExpression,
         },
         CallPathTree, Literal,
@@ -127,6 +127,7 @@ impl Parse for Declaration {
             Declaration::ConstantDeclaration(decl) => decl.parse(ctx),
             Declaration::StorageDeclaration(decl) => decl.parse(ctx),
             Declaration::TypeAliasDeclaration(decl) => decl.parse(ctx),
+            Declaration::Type(decl) => decl.parse(ctx),
         }
     }
 }
@@ -732,6 +733,7 @@ impl Parse for TraitDeclaration {
         self.interface_surface.iter().for_each(|item| match item {
             TraitItem::TraitFn(trait_fn) => trait_fn.parse(ctx),
             TraitItem::Constant(const_decl) => const_decl.parse(ctx),
+            TraitItem::TraitType(trait_type) => trait_type.parse(ctx),
         });
         self.methods.iter().for_each(|func_dec| {
             func_dec.parse(ctx);

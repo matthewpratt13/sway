@@ -79,6 +79,62 @@ impl ty::TyTraitDecl {
 
         let mut ids: HashSet<Ident> = HashSet::default();
 
+        for item in interface_surface.clone().into_iter() {
+            let decl_name = match item {
+                TraitItem::TraitFn(_) => None,
+                TraitItem::Constant(_) => None,
+                TraitItem::Type(type_decl) => {
+                    let type_decl =
+                        ty::TyTraitType::type_check(handler, ctx.by_ref(), type_decl.clone())?;
+                    let decl_ref = decl_engine.insert(type_decl.clone());
+                    dummy_interface_surface.push(ty::TyImplItem::Type(decl_ref.clone()));
+                    new_interface_surface.push(ty::TyTraitInterfaceItem::Type(decl_ref.clone()));
+
+                    let type_name = type_decl.name;
+                    ctx.insert_symbol(
+                        handler,
+                        type_name.clone(),
+                        ty::TyDecl::TypeDecl(ty::TypeDecl {
+                            name: type_name.clone(),
+                            decl_id: *decl_ref.id(),
+                            decl_span: type_decl.span.clone(),
+                        }),
+                    )?;
+
+                    Some(type_name)
+                }
+            };
+
+            if let Some(decl_name) = decl_name {
+                if !ids.insert(decl_name.clone()) {
+                    handler.emit_err(CompileError::MultipleDefinitionsOfName {
+                        name: decl_name.clone(),
+                        span: decl_name.span(),
+                    });
+                }
+            }
+        }
+
+        // insert placeholder functions representing the interface surface
+        // to allow methods to use those functions
+        ctx.namespace.insert_trait_implementation(
+            handler,
+            CallPath {
+                prefixes: vec![],
+                suffix: name.clone(),
+                is_absolute: false,
+            },
+            new_type_parameters.iter().map(|x| x.into()).collect(),
+            self_type,
+            &dummy_interface_surface,
+            &span,
+            None,
+            false,
+            false,
+            engines,
+        )?;
+        let mut dummy_interface_surface = vec![];
+
         for item in interface_surface.into_iter() {
             let decl_name = match item {
                 TraitItem::TraitFn(method) => {
@@ -90,7 +146,7 @@ impl ty::TyTraitDecl {
                             .with_parent(decl_engine, (*decl_ref.id()).into()),
                     ));
                     new_interface_surface.push(ty::TyTraitInterfaceItem::TraitFn(decl_ref));
-                    method.name.clone()
+                    Some(method.name.clone())
                 }
                 TraitItem::Constant(const_decl) => {
                     let const_decl =
@@ -110,15 +166,18 @@ impl ty::TyTraitDecl {
                         }),
                     )?;
 
-                    const_name
+                    Some(const_name)
                 }
+                TraitItem::Type(_) => None,
             };
 
-            if !ids.insert(decl_name.clone()) {
-                handler.emit_err(CompileError::MultipleDefinitionsOfName {
-                    name: decl_name.clone(),
-                    span: decl_name.span(),
-                });
+            if let Some(decl_name) = decl_name {
+                if !ids.insert(decl_name.clone()) {
+                    handler.emit_err(CompileError::MultipleDefinitionsOfName {
+                        name: decl_name.clone(),
+                        span: decl_name.span(),
+                    });
+                }
             }
         }
 
@@ -137,6 +196,7 @@ impl ty::TyTraitDecl {
             &span,
             None,
             false,
+            true,
             engines,
         )?;
 
@@ -189,6 +249,10 @@ impl ty::TyTraitDecl {
                     interface_surface_item_refs
                         .insert((decl_ref.name().clone(), type_id), item.clone());
                 }
+                ty::TyTraitInterfaceItem::Type(decl_ref) => {
+                    interface_surface_item_refs
+                        .insert((decl_ref.name().clone(), type_id), item.clone());
+                }
             }
         }
 
@@ -203,6 +267,9 @@ impl ty::TyTraitDecl {
                     impld_item_refs.insert((decl_ref.name().clone(), type_id), item.clone());
                 }
                 ty::TyTraitItem::Constant(decl_ref) => {
+                    impld_item_refs.insert((decl_ref.name().clone(), type_id), item.clone());
+                }
+                ty::TyTraitItem::Type(decl_ref) => {
                     impld_item_refs.insert((decl_ref.name().clone(), type_id), item.clone());
                 }
             };
@@ -245,6 +312,10 @@ impl ty::TyTraitDecl {
                     interface_surface_item_refs
                         .insert((decl_ref.name().clone(), type_id), item.clone());
                 }
+                ty::TyTraitInterfaceItem::Type(decl_ref) => {
+                    interface_surface_item_refs
+                        .insert((decl_ref.name().clone(), type_id), item.clone());
+                }
             }
         }
 
@@ -255,6 +326,9 @@ impl ty::TyTraitDecl {
                     item_refs.insert((decl_ref.name().clone(), type_id), item.clone());
                 }
                 ty::TyTraitItem::Constant(decl_ref) => {
+                    item_refs.insert((decl_ref.name().clone(), type_id), item.clone());
+                }
+                ty::TyTraitItem::Type(decl_ref) => {
                     item_refs.insert((decl_ref.name().clone(), type_id), item.clone());
                 }
             }
@@ -295,6 +369,14 @@ impl ty::TyTraitDecl {
                     impld_item_refs.insert(
                         (const_decl.call_path.suffix.clone(), type_id),
                         TyTraitItem::Constant(decl_engine.insert(const_decl)),
+                    );
+                }
+                ty::TyTraitItem::Type(decl_ref) => {
+                    let mut type_decl = decl_engine.get_type(&decl_ref);
+                    type_decl.subst(&type_mapping, engines);
+                    impld_item_refs.insert(
+                        (type_decl.name.clone(), type_id),
+                        TyTraitItem::Type(decl_engine.insert(type_decl)),
                     );
                 }
             }
@@ -366,6 +448,22 @@ impl ty::TyTraitDecl {
                         const_shadowing_mode,
                     );
                 }
+                ty::TyTraitInterfaceItem::Type(decl_ref) => {
+                    let type_decl = decl_engine.get_type(decl_ref);
+                    let type_name = type_decl.name;
+                    all_items.push(TyImplItem::Type(decl_ref.clone()));
+                    let const_shadowing_mode = ctx.const_shadowing_mode();
+                    let _ = ctx.namespace.insert_symbol(
+                        handler,
+                        type_name.clone(),
+                        ty::TyDecl::TypeDecl(ty::TypeDecl {
+                            name: type_name,
+                            decl_id: *decl_ref.id(),
+                            decl_span: type_decl.span.clone(),
+                        }),
+                        const_shadowing_mode,
+                    );
+                }
             }
         }
         for item in items.iter() {
@@ -387,6 +485,12 @@ impl ty::TyTraitDecl {
                     const_decl.subst(&type_mapping, engines);
                     all_items.push(TyImplItem::Constant(ctx.engines.de().insert(const_decl)));
                 }
+                ty::TyTraitItem::Type(decl_ref) => {
+                    let mut type_decl = decl_engine.get_type(decl_ref);
+                    type_decl.replace_self_type(engines, type_id);
+                    type_decl.subst(&type_mapping, engines);
+                    all_items.push(TyImplItem::Type(ctx.engines.de().insert(type_decl)));
+                }
             }
         }
 
@@ -402,6 +506,7 @@ impl ty::TyTraitDecl {
             &all_items,
             &trait_name.span(),
             Some(self.span()),
+            false,
             false,
             engines,
         );

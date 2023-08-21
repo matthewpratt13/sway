@@ -92,9 +92,8 @@ impl ty::TyImplTrait {
 
         let impl_trait = match ctx
             .namespace
-            .resolve_call_path(handler, &trait_name)
+            .resolve_call_path(handler, engines, &trait_name)
             .ok()
-            .cloned()
         {
             Some(ty::TyDecl::TraitDecl(ty::TraitDecl { decl_id, .. })) => {
                 let mut trait_decl = decl_engine.get_trait(&decl_id);
@@ -337,6 +336,25 @@ impl ty::TyImplTrait {
                             }),
                         )?;
                     }
+                    ImplItem::Type(type_decl) => {
+                        let type_decl =
+                            match ty::TyTraitType::type_check(handler, ctx.by_ref(), type_decl) {
+                                Ok(res) => res,
+                                Err(_) => continue,
+                            };
+                        let decl_ref = decl_engine.insert(type_decl);
+                        new_items.push(TyImplItem::Type(decl_ref.clone()));
+
+                        ctx.insert_symbol(
+                            handler,
+                            decl_ref.name().clone(),
+                            ty::TyDecl::TypeDecl(ty::TypeDecl {
+                                name: decl_ref.name().clone(),
+                                decl_id: *decl_ref.id(),
+                                decl_span: decl_ref.span().clone(),
+                            }),
+                        )?;
+                    }
                 }
             }
             Ok(())
@@ -371,6 +389,7 @@ fn type_check_trait_implementation(
     block_span: &Span,
     is_contract: bool,
 ) -> Result<Vec<TyImplItem>, ErrorEmitted> {
+    let type_engine = ctx.engines.te();
     let decl_engine = ctx.engines.de();
     let engines = ctx.engines();
     let self_type = ctx.self_type();
@@ -408,6 +427,10 @@ fn type_check_trait_implementation(
     // that still need to be implemented for the trait to be fully implemented.
     let mut constant_checklist: BTreeMap<Ident, ty::TyConstantDecl> = BTreeMap::new();
 
+    // This map keeps track of the remaining types in the interface surface
+    // that still need to be implemented for the trait to be fully implemented.
+    let mut type_checklist: BTreeMap<Ident, ty::TyTraitType> = BTreeMap::new();
+
     // This map keeps track of the interface declaration id's of the trait
     // definition.
     let mut interface_item_refs: InterfaceItemMap = BTreeMap::new();
@@ -444,6 +467,7 @@ fn type_check_trait_implementation(
             &trait_name.span(),
             Some(trait_decl_span.clone()),
             false,
+            false,
             engines,
         );
 
@@ -465,13 +489,60 @@ fn type_check_trait_implementation(
                 constant_checklist.insert(name.clone(), constant);
                 interface_item_refs.insert((name, self_type), item.clone());
             }
+            TyTraitInterfaceItem::Type(decl_ref) => {
+                let ty = decl_engine.get_type(decl_ref);
+                let name = ty.name.clone();
+                type_checklist.insert(name.clone(), ty);
+                interface_item_refs.insert((name, self_type), item.clone());
+            }
+        }
+    }
+
+    let mut trait_type_mapping =
+        TypeSubstMap::from_type_parameters_and_type_arguments(vec![], vec![]);
+
+    for item in impl_items {
+        match item {
+            ImplItem::Fn(_) => {}
+            ImplItem::Constant(_) => {}
+            ImplItem::Type(type_decl) => {
+                let mut type_decl = type_check_type_decl(
+                    handler,
+                    ctx.by_ref(),
+                    type_decl,
+                    trait_name,
+                    is_contract,
+                    &impld_item_refs,
+                    &type_checklist,
+                )
+                .unwrap_or_else(|_| ty::TyTraitType::error(ctx.engines(), type_decl.clone()));
+
+                type_decl.subst(&trait_type_mapping, engines);
+
+                // Remove this type from the checklist.
+                let name = type_decl.name.clone();
+                type_checklist.remove(&name);
+
+                // Add this type to the "impld decls".
+                let decl_ref = decl_engine.insert(type_decl.clone());
+                impld_item_refs.insert((name, self_type), TyTraitItem::Type(decl_ref));
+
+                let old_type_decl_info = TypeInfo::TraitType {
+                    name: type_decl.name.clone(),
+                    trait_type_id: self_type,
+                };
+                trait_type_mapping.extend(TypeSubstMap::from_type_parameters_and_type_arguments(
+                    vec![type_engine.insert(engines, old_type_decl_info)],
+                    vec![type_decl.ty.clone().unwrap().type_id],
+                ));
+            }
         }
     }
 
     for item in impl_items {
         match item {
             ImplItem::Fn(impl_method) => {
-                let impl_method = type_check_impl_method(
+                let mut impl_method = type_check_impl_method(
                     handler,
                     ctx.by_ref(),
                     impl_type_parameters,
@@ -483,6 +554,8 @@ fn type_check_trait_implementation(
                 )
                 .unwrap_or_else(|_| ty::TyFunctionDecl::error(impl_method.clone()));
 
+                impl_method.subst(&trait_type_mapping, engines);
+
                 // Remove this method from the checklist.
                 let name = impl_method.name.clone();
                 method_checklist.remove(&name);
@@ -492,7 +565,7 @@ fn type_check_trait_implementation(
                 impld_item_refs.insert((name, self_type), TyTraitItem::Fn(decl_ref));
             }
             ImplItem::Constant(const_decl) => {
-                let const_decl = type_check_const_decl(
+                let mut const_decl = type_check_const_decl(
                     handler,
                     ctx.by_ref(),
                     const_decl,
@@ -503,6 +576,8 @@ fn type_check_trait_implementation(
                 )
                 .unwrap_or_else(|_| ty::TyConstantDecl::error(ctx.engines(), const_decl.clone()));
 
+                const_decl.subst(&trait_type_mapping, engines);
+
                 // Remove this constant from the checklist.
                 let name = const_decl.call_path.suffix.clone();
                 constant_checklist.remove(&name);
@@ -511,6 +586,7 @@ fn type_check_trait_implementation(
                 let decl_ref = decl_engine.insert(const_decl);
                 impld_item_refs.insert((name, self_type), TyTraitItem::Constant(decl_ref));
             }
+            ImplItem::Type(_) => {}
         }
     }
 
@@ -522,7 +598,7 @@ fn type_check_trait_implementation(
     // the trait name in the current impl block that we are type checking and
     // using the stub decl ids from the interface surface and the new
     // decl ids from the newly implemented methods.
-    let type_mapping = TypeSubstMap::from_type_parameters_and_type_arguments(
+    let mut type_mapping = TypeSubstMap::from_type_parameters_and_type_arguments(
         trait_type_parameters
             .iter()
             .map(|type_param| type_param.type_id)
@@ -532,6 +608,8 @@ fn type_check_trait_implementation(
             .map(|type_arg| type_arg.type_id)
             .collect(),
     );
+    type_mapping.extend(trait_type_mapping);
+
     interface_item_refs.extend(supertrait_interface_item_refs);
     impld_item_refs.extend(supertrait_impld_item_refs);
     let decl_mapping = DeclMapping::from_interface_and_item_and_impld_decl_refs(
@@ -558,6 +636,12 @@ fn type_check_trait_implementation(
                 const_decl.subst(&type_mapping, engines);
                 const_decl.replace_self_type(engines, ctx.self_type());
                 all_items_refs.push(TyImplItem::Constant(decl_engine.insert(const_decl)));
+            }
+            TyImplItem::Type(decl_ref) => {
+                let mut type_decl = decl_engine.get_type(decl_ref);
+                type_decl.subst(&type_mapping, engines);
+                type_decl.replace_self_type(engines, ctx.self_type());
+                all_items_refs.push(TyImplItem::Type(decl_engine.insert(type_decl.clone())));
             }
         }
     }
@@ -886,6 +970,86 @@ fn type_check_const_decl(
     Ok(const_decl)
 }
 
+fn type_check_type_decl(
+    handler: &Handler,
+    mut ctx: TypeCheckContext,
+    type_decl: &TraitTypeDeclaration,
+    trait_name: &CallPath,
+    is_contract: bool,
+    impld_type_ids: &ItemMap,
+    type_checklist: &BTreeMap<Ident, ty::TyTraitType>,
+) -> Result<ty::TyTraitType, ErrorEmitted> {
+    let engines = ctx.engines();
+    let type_engine = engines.te();
+    let self_type = ctx.self_type();
+
+    let mut ctx = ctx
+        .by_ref()
+        .with_help_text("")
+        .with_type_annotation(type_engine.insert(engines, TypeInfo::Unknown));
+
+    let interface_name = || -> InterfaceName {
+        if is_contract {
+            InterfaceName::Abi(trait_name.suffix.clone())
+        } else {
+            InterfaceName::Trait(trait_name.suffix.clone())
+        }
+    };
+
+    // type check the type declaration
+    let type_decl = ty::TyTraitType::type_check(handler, ctx.by_ref(), type_decl.clone())?;
+
+    let type_name = type_decl.name.clone();
+
+    // Ensure that there aren't multiple definitions of this type
+    if impld_type_ids.contains_key(&(type_name.clone(), self_type)) {
+        return Err(handler.emit_err(CompileError::MultipleDefinitionsOfType {
+            name: type_name.clone(),
+            span: type_name.span(),
+        }));
+    }
+
+    // Ensure that the type checklist contains this type.
+    let mut type_decl_signature = match type_checklist.get(&type_name) {
+        Some(type_decl) => type_decl.clone(),
+        None => {
+            return Err(
+                handler.emit_err(CompileError::TypeNotAPartOfInterfaceSurface {
+                    name: type_name.clone(),
+                    interface_name: interface_name(),
+                    span: type_name.span(),
+                }),
+            );
+        }
+    };
+
+    // replace instances of `TypeInfo::SelfType` with a fresh
+    // `TypeInfo::SelfType` to avoid replacing types in the stub constant
+    // declaration
+    type_decl_signature.replace_self_type(engines, self_type);
+
+    // unify the types from the constant with the constant signature
+    /*if !type_engine.get(const_decl.type_ascription.type_id).eq(
+        &type_engine.get(const_decl_signature.type_ascription.type_id),
+        engines,
+    ) {
+        errors.push(CompileError::MismatchedTypeInInterfaceSurface {
+            interface_name: interface_name(),
+            span: const_decl.span.clone(),
+            decl_type: "constant".to_string(),
+            given: engines
+                .help_out(const_decl.type_ascription.type_id)
+                .to_string(),
+            expected: engines
+                .help_out(const_decl_signature.type_ascription.type_id)
+                .to_string(),
+        });
+        return err(warnings, errors);
+    }*/
+
+    Ok(type_decl)
+}
+
 /// Given an array of [TypeParameter] `type_parameters`, checks to see if any of
 /// the type parameters are unconstrained on the signature of the impl block.
 ///
@@ -973,7 +1137,8 @@ fn handle_supertraits(
     mut ctx: TypeCheckContext,
     supertraits: &[Supertrait],
 ) -> Result<(InterfaceItemMap, ItemMap), ErrorEmitted> {
-    let decl_engine = ctx.engines.de();
+    let engines = ctx.engines;
+    let decl_engine = engines.de();
 
     let mut interface_surface_item_ids: InterfaceItemMap = BTreeMap::new();
     let mut impld_item_refs: ItemMap = BTreeMap::new();
@@ -995,9 +1160,8 @@ fn handle_supertraits(
 
             match ctx
                 .namespace
-                .resolve_call_path(handler, &supertrait.name)
+                .resolve_call_path(handler, engines, &supertrait.name)
                 .ok()
-                .cloned()
             {
                 Some(ty::TyDecl::TraitDecl(ty::TraitDecl { decl_id, .. })) => {
                     let trait_decl = decl_engine.get_trait(&decl_id);
