@@ -892,6 +892,16 @@ impl TyDecl {
     }
 }
 
+impl From<DeclRef<DeclId<TyTraitType>>> for TyDecl {
+    fn from(decl_ref: DeclRef<DeclId<TyTraitType>>) -> Self {
+        TyDecl::TypeDecl(TypeDecl {
+            name: decl_ref.name().clone(),
+            decl_id: *decl_ref.id(),
+            decl_span: decl_ref.decl_span().clone(),
+        })
+    }
+}
+
 impl From<DeclRef<DeclId<TyConstantDecl>>> for TyDecl {
     fn from(decl_ref: DeclRef<DeclId<TyConstantDecl>>) -> Self {
         TyDecl::ConstantDecl(ConstantDecl {

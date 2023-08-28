@@ -181,24 +181,22 @@ impl Root {
                         ident.span(),
                     )));
                 }
+            } else if let Some(decl) = decl_opt {
+                decl_opt = Some(self.resolve_associated_type(handler, engines, ident, decl)?);
             } else {
-                if let Some(decl) = decl_opt {
-                    decl_opt = Some(self.resolve_associated_type(handler, engines, ident, decl)?);
-                } else {
-                    match module.submodules.get(ident.as_str()) {
-                        Some(ns) => {
-                            module = ns;
-                            current_mod_path.push(ident.clone());
-                        }
-                        None => {
-                            decl_opt = Some(self.resolve_symbol_helper(
-                                handler,
-                                engines,
-                                &current_mod_path,
-                                ident,
-                                module,
-                            )?);
-                        }
+                match module.submodules.get(ident.as_str()) {
+                    Some(ns) => {
+                        module = ns;
+                        current_mod_path.push(ident.clone());
+                    }
+                    None => {
+                        decl_opt = Some(self.resolve_symbol_helper(
+                            handler,
+                            engines,
+                            &current_mod_path,
+                            ident,
+                            module,
+                        )?);
                     }
                 }
             }

@@ -348,8 +348,8 @@ impl PartialEqWithEngines for TypeInfo {
             ) => {
                 l_name == r_name
                     && type_engine
-                        .get(l_trait_type_id.clone())
-                        .eq(&type_engine.get(r_trait_type_id.clone()), engines)
+                        .get(*l_trait_type_id)
+                        .eq(&type_engine.get(*r_trait_type_id), engines)
             }
             (l, r) => l.discriminant_value() == r.discriminant_value(),
         }

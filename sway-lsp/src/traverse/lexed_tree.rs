@@ -8,7 +8,7 @@ use sway_ast::{
     IfCondition, IfExpr, ItemAbi, ItemConfigurable, ItemConst, ItemEnum, ItemFn, ItemImpl,
     ItemImplItem, ItemKind, ItemStorage, ItemStruct, ItemTrait, ItemTypeAlias, ItemUse,
     MatchBranchKind, ModuleKind, Pattern, PatternStructField, Statement, StatementLet,
-    StorageField, Ty, TypeField, UseTree,
+    StorageField, TraitType, Ty, TypeField, UseTree,
 };
 use sway_core::language::lexed::LexedProgram;
 use sway_types::{Ident, Span, Spanned};
@@ -303,6 +303,7 @@ impl Parse for ItemTrait {
             .for_each(|(annotated, _)| match &annotated.value {
                 sway_ast::ItemTraitItem::Fn(fn_sig) => fn_sig.parse(ctx),
                 sway_ast::ItemTraitItem::Const(item_const) => item_const.parse(ctx),
+                sway_ast::ItemTraitItem::Type(item_type) => item_type.parse(ctx),
             });
 
         if let Some(trait_defs_opt) = &self.trait_defs_opt {
@@ -334,6 +335,7 @@ impl Parse for ItemImpl {
             .for_each(|item| match &item.value {
                 ItemImplItem::Fn(fn_decl) => fn_decl.parse(ctx),
                 ItemImplItem::Const(const_decl) => const_decl.parse(ctx),
+                ItemImplItem::Type(type_decl) => type_decl.parse(ctx),
             });
     }
 }
@@ -348,6 +350,7 @@ impl Parse for ItemAbi {
             .for_each(|(annotated, _)| match &annotated.value {
                 sway_ast::ItemTraitItem::Fn(fn_sig) => fn_sig.parse(ctx),
                 sway_ast::ItemTraitItem::Const(item_const) => item_const.parse(ctx),
+                sway_ast::ItemTraitItem::Type(item_type) => item_type.parse(ctx),
             });
 
         if let Some(abi_defs_opt) = self.abi_defs_opt.as_ref() {
@@ -372,6 +375,16 @@ impl Parse for ItemConst {
 
         if let Some(expr) = self.expr_opt.as_ref() {
             expr.parse(ctx);
+        }
+    }
+}
+
+impl Parse for TraitType {
+    fn parse(&self, ctx: &ParseContext) {
+        insert_keyword(ctx, self.type_token.span());
+
+        if let Some(ty) = self.ty_opt.as_ref() {
+            ty.parse(ctx);
         }
     }
 }

@@ -308,6 +308,7 @@ impl Dependencies {
                 .gather_from_type_argument(engines, type_ascription)
                 .gather_from_expr(engines, body),
             Declaration::ConstantDeclaration(decl) => self.gather_from_constant_decl(engines, decl),
+            Declaration::TraitTypeDeclaration(decl) => self.gather_from_type_decl(engines, decl),
             Declaration::FunctionDeclaration(fn_decl) => self.gather_from_fn_decl(engines, fn_decl),
             Declaration::StructDeclaration(StructDeclaration {
                 fields,
@@ -806,6 +807,7 @@ fn decl_name(type_engine: &TypeEngine, decl: &Declaration) -> Option<DependentSy
             Some(decl.span.clone()),
         )),
         Declaration::ConstantDeclaration(decl) => dep_sym(decl.name.clone()),
+        Declaration::TraitTypeDeclaration(decl) => dep_sym(decl.name.clone()),
         Declaration::StructDeclaration(decl) => dep_sym(decl.name.clone()),
         Declaration::EnumDeclaration(decl) => dep_sym(decl.name.clone()),
         Declaration::TraitDeclaration(decl) => dep_sym(decl.name.clone()),

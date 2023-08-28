@@ -500,21 +500,19 @@ impl TypeEngine {
 
                         if let Some(ty) = decl_type.ty {
                             ty.type_id
+                        } else if let Some(self_type) = self_type {
+                            self.insert(
+                                engines,
+                                TypeInfo::TraitType {
+                                    name,
+                                    trait_type_id: self_type,
+                                },
+                            )
                         } else {
-                            if let Some(self_type) = self_type {
-                                self.insert(
-                                    engines,
-                                    TypeInfo::TraitType {
-                                        name,
-                                        trait_type_id: self_type,
-                                    },
-                                )
-                            } else {
-                                return Err(handler.emit_err(CompileError::Internal(
-                                    "Self type not specified",
-                                    decl_span,
-                                )));
-                            }
+                            return Err(handler.emit_err(CompileError::Internal(
+                                "Self type not specified",
+                                decl_span,
+                            )));
                         }
                     }
                     _ => {

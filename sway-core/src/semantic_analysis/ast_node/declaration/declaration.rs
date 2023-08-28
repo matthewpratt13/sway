@@ -74,6 +74,16 @@ impl ty::TyDecl {
                 ctx.insert_symbol(handler, const_decl.name().clone(), typed_const_decl.clone())?;
                 typed_const_decl
             }
+            parsed::Declaration::TraitTypeDeclaration(decl) => {
+                let span = decl.span.clone();
+                let type_decl = match ty::TyTraitType::type_check(handler, ctx.by_ref(), decl) {
+                    Ok(res) => res,
+                    Err(err) => return Ok(ty::TyDecl::ErrorRecovery(span, err)),
+                };
+                let typed_type_decl: ty::TyDecl = decl_engine.insert(type_decl.clone()).into();
+                ctx.insert_symbol(handler, type_decl.name().clone(), typed_type_decl.clone())?;
+                typed_type_decl
+            }
             parsed::Declaration::EnumDeclaration(decl) => {
                 let span = decl.span.clone();
                 let enum_decl = match ty::TyEnumDecl::type_check(handler, ctx.by_ref(), decl) {
