@@ -107,8 +107,13 @@ impl Root {
         let (decl, mod_path) =
             self.resolve_call_path_and_mod_path(handler, engines, mod_path, call_path, self_type)?;
 
-        // In case there are no prefixes we don't need to check visibility
+        // In case there is no mod path we don't need to check visibility
         if mod_path.is_empty() {
+            return Ok(decl);
+        }
+
+        // In case there are no prefixes we don't need to check visibility
+        if call_path.prefixes.is_empty() {
             return Ok(decl);
         }
 
