@@ -102,6 +102,7 @@ impl TypeEngine {
         call_site_span: &Span,
         namespace: &mut Namespace,
         mod_path: &Path,
+        self_type: Option<TypeId>,
     ) -> Result<(), ErrorEmitted>
     where
         T: MonomorphizeHelper + SubstTypes,
@@ -155,7 +156,7 @@ impl TypeEngine {
                             handler,
                             engines,
                             type_argument.type_id,
-                            None,
+                            self_type,
                             &type_argument.span,
                             enforce_type_arguments,
                             None,
@@ -429,6 +430,7 @@ impl TypeEngine {
                             span,
                             namespace,
                             mod_path,
+                            self_type,
                         )?;
 
                         // insert the new copy in the decl engine
@@ -460,6 +462,7 @@ impl TypeEngine {
                             span,
                             namespace,
                             mod_path,
+                            self_type,
                         )?;
 
                         // insert the new copy in the decl engine

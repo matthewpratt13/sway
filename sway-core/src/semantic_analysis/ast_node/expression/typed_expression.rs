@@ -886,6 +886,7 @@ impl ty::TyExpression {
             &mut type_arguments,
             EnforceTypeArguments::Yes,
             span,
+            Some(ctx.self_type()),
         )?;
 
         // Update `access_type` to be the type of the monomorphized struct after inserting it

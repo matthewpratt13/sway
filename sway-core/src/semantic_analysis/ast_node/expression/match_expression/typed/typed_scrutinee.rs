@@ -184,6 +184,7 @@ fn type_check_struct(
         &mut [],
         EnforceTypeArguments::No,
         &struct_name.span(),
+        None,
     )?;
 
     // type check the fields
@@ -311,6 +312,7 @@ fn type_check_enum(
         &mut [],
         EnforceTypeArguments::No,
         &callsite_span,
+        None,
     )?;
 
     // check to see if the variant exists and grab it if it does

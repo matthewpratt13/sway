@@ -548,6 +548,7 @@ pub(crate) fn resolve_method_name(
         method_name.type_arguments.to_vec_mut(),
         EnforceTypeArguments::No,
         &method_name_span,
+        Some(ctx.self_type()),
     )?;
 
     if let Some(implementing_type) = &func_decl.implementing_type {

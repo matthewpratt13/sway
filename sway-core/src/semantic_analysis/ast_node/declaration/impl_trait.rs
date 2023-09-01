@@ -105,6 +105,7 @@ impl ty::TyImplTrait {
                     &mut trait_type_arguments,
                     EnforceTypeArguments::Yes,
                     &trait_name.span(),
+                    Some(ctx.self_type()),
                 )?;
 
                 // Insert the interface surface and methods from this trait into
@@ -317,12 +318,15 @@ impl ty::TyImplTrait {
                         new_items.push(TyImplItem::Fn(decl_engine.insert(fn_decl)));
                     }
                     ImplItem::Constant(const_decl) => {
-                        let const_decl =
-                            match ty::TyConstantDecl::type_check(handler, ctx.by_ref(), const_decl)
-                            {
-                                Ok(res) => res,
-                                Err(_) => continue,
-                            };
+                        let const_decl = match ty::TyConstantDecl::type_check(
+                            handler,
+                            ctx.by_ref(),
+                            const_decl,
+                            None,
+                        ) {
+                            Ok(res) => res,
+                            Err(_) => continue,
+                        };
                         let decl_ref = decl_engine.insert(const_decl);
                         new_items.push(TyImplItem::Constant(decl_ref.clone()));
 
@@ -551,6 +555,7 @@ fn type_check_trait_implementation(
                     is_contract,
                     &impld_item_refs,
                     &method_checklist,
+                    &trait_type_mapping,
                 )
                 .unwrap_or_else(|_| ty::TyFunctionDecl::error(impl_method.clone()));
 
@@ -573,6 +578,7 @@ fn type_check_trait_implementation(
                     is_contract,
                     &impld_item_refs,
                     &constant_checklist,
+                    &trait_type_mapping,
                 )
                 .unwrap_or_else(|_| ty::TyConstantDecl::error(ctx.engines(), const_decl.clone()));
 
@@ -622,8 +628,8 @@ fn type_check_trait_implementation(
             TyImplItem::Fn(decl_ref) => {
                 let mut method = decl_engine.get_function(decl_ref);
                 method.replace_decls(&decl_mapping, handler, &mut ctx)?;
-                method.subst(&type_mapping, engines);
                 method.replace_self_type(engines, ctx.self_type());
+                method.subst(&type_mapping, engines);
                 all_items_refs.push(TyImplItem::Fn(
                     decl_engine
                         .insert(method)
@@ -633,14 +639,14 @@ fn type_check_trait_implementation(
             TyImplItem::Constant(decl_ref) => {
                 let mut const_decl = decl_engine.get_constant(decl_ref);
                 const_decl.replace_decls(&decl_mapping, handler, &mut ctx)?;
-                const_decl.subst(&type_mapping, engines);
                 const_decl.replace_self_type(engines, ctx.self_type());
+                const_decl.subst(&type_mapping, engines);
                 all_items_refs.push(TyImplItem::Constant(decl_engine.insert(const_decl)));
             }
             TyImplItem::Type(decl_ref) => {
                 let mut type_decl = decl_engine.get_type(decl_ref);
-                type_decl.subst(&type_mapping, engines);
                 type_decl.replace_self_type(engines, ctx.self_type());
+                type_decl.subst(&type_mapping, engines);
                 all_items_refs.push(TyImplItem::Type(decl_engine.insert(type_decl.clone())));
             }
         }
@@ -684,6 +690,7 @@ fn type_check_impl_method(
     is_contract: bool,
     impld_item_refs: &ItemMap,
     method_checklist: &BTreeMap<Ident, ty::TyTraitFn>,
+    type_subst_mapping: &TypeSubstMap,
 ) -> Result<ty::TyFunctionDecl, ErrorEmitted> {
     let type_engine = ctx.engines.te();
     let engines = ctx.engines();
@@ -776,19 +783,25 @@ fn type_check_impl_method(
                 });
             }
 
-            if !type_engine.get(impl_method_param.type_argument.type_id).eq(
-                &type_engine.get(impl_method_signature_param.type_argument.type_id),
+            // this subst is required to replace associated types, namely TypeInfo::TraitType.
+            let mut impl_method_param_type_id = impl_method_param.type_argument.type_id.clone();
+            impl_method_param_type_id.subst(type_subst_mapping, engines);
+
+            let mut impl_method_signature_param_type_id =
+                impl_method_signature_param.type_argument.type_id.clone();
+            impl_method_signature_param_type_id.subst(type_subst_mapping, engines);
+
+            if !type_engine.get(impl_method_param_type_id).eq(
+                &type_engine.get(impl_method_signature_param_type_id),
                 engines,
             ) {
                 handler.emit_err(CompileError::MismatchedTypeInInterfaceSurface {
                     interface_name: interface_name(),
                     span: impl_method_param.type_argument.span.clone(),
                     decl_type: "function".to_string(),
-                    given: engines
-                        .help_out(impl_method_param.type_argument.type_id)
-                        .to_string(),
+                    given: engines.help_out(impl_method_param_type_id).to_string(),
                     expected: engines
-                        .help_out(impl_method_signature_param.type_argument.type_id)
+                        .help_out(impl_method_signature_param_type_id)
                         .to_string(),
                 });
                 continue;
@@ -844,8 +857,16 @@ fn type_check_impl_method(
             (true, true) | (false, false) => (), // no payability mismatch
         }
 
-        if !type_engine.get(impl_method.return_type.type_id).eq(
-            &type_engine.get(impl_method_signature.return_type.type_id),
+        // this subst is required to replace associated types, namely TypeInfo::TraitType.
+        let mut impl_method_return_type_id = impl_method.return_type.type_id.clone();
+        impl_method_return_type_id.subst(type_subst_mapping, engines);
+
+        let mut impl_method_signature_return_type_type_id =
+            impl_method_signature.return_type.type_id.clone();
+        impl_method_signature_return_type_type_id.subst(type_subst_mapping, engines);
+
+        if !type_engine.get(impl_method_return_type_id).eq(
+            &type_engine.get(impl_method_signature_return_type_type_id),
             engines,
         ) {
             return Err(
@@ -854,9 +875,9 @@ fn type_check_impl_method(
                     span: impl_method.return_type.span.clone(),
                     decl_type: "function".to_string(),
                     expected: engines
-                        .help_out(impl_method_signature.return_type)
+                        .help_out(impl_method_signature_return_type_type_id)
                         .to_string(),
-                    given: engines.help_out(impl_method.return_type).to_string(),
+                    given: engines.help_out(impl_method_return_type_id).to_string(),
                 }),
             );
         }
@@ -895,6 +916,7 @@ fn type_check_const_decl(
     is_contract: bool,
     impld_constant_ids: &ItemMap,
     constant_checklist: &BTreeMap<Ident, ty::TyConstantDecl>,
+    type_subst_mapping: &TypeSubstMap,
 ) -> Result<ty::TyConstantDecl, ErrorEmitted> {
     let type_engine = ctx.engines.te();
     let engines = ctx.engines();
@@ -914,7 +936,12 @@ fn type_check_const_decl(
     };
 
     // type check the constant declaration
-    let const_decl = ty::TyConstantDecl::type_check(handler, ctx.by_ref(), const_decl.clone())?;
+    let const_decl = ty::TyConstantDecl::type_check(
+        handler,
+        ctx.by_ref(),
+        const_decl.clone(),
+        Some(type_subst_mapping),
+    )?;
 
     let const_name = const_decl.call_path.suffix.clone();
 
@@ -947,22 +974,25 @@ fn type_check_const_decl(
     // declaration
     const_decl_signature.replace_self_type(engines, self_type);
 
+    // this subst is required to replace associated types, namely TypeInfo::TraitType.
+    let mut const_decl_type_id = const_decl.type_ascription.type_id.clone();
+    const_decl_type_id.subst(type_subst_mapping, engines);
+
+    let mut const_decl_signature_type_id = const_decl_signature.type_ascription.type_id.clone();
+    const_decl_signature_type_id.subst(type_subst_mapping, engines);
+
     // unify the types from the constant with the constant signature
-    if !type_engine.get(const_decl.type_ascription.type_id).eq(
-        &type_engine.get(const_decl_signature.type_ascription.type_id),
-        engines,
-    ) {
+    if !type_engine
+        .get(const_decl_type_id)
+        .eq(&type_engine.get(const_decl_signature_type_id), engines)
+    {
         return Err(
             handler.emit_err(CompileError::MismatchedTypeInInterfaceSurface {
                 interface_name: interface_name(),
                 span: const_decl.span.clone(),
                 decl_type: "constant".to_string(),
-                given: engines
-                    .help_out(const_decl.type_ascription.type_id)
-                    .to_string(),
-                expected: engines
-                    .help_out(const_decl_signature.type_ascription.type_id)
-                    .to_string(),
+                given: engines.help_out(const_decl_type_id).to_string(),
+                expected: engines.help_out(const_decl_signature_type_id).to_string(),
             }),
         );
     }

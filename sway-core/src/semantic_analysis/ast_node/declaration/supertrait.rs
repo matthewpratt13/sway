@@ -71,6 +71,7 @@ pub(crate) fn insert_supertraits_into_namespace(
                             &mut type_arguments,
                             EnforceTypeArguments::Yes,
                             &supertrait.name.span(),
+                            Some(type_id),
                         )
                         .is_err()
                     {

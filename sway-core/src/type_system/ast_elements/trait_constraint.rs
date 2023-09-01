@@ -197,6 +197,7 @@ impl TraitConstraint {
                     &mut type_arguments,
                     EnforceTypeArguments::Yes,
                     &trait_name.span(),
+                    Some(ctx.self_type()),
                 )?;
 
                 // Insert the interface surface and methods from this trait into

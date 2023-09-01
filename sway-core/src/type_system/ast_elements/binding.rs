@@ -247,6 +247,7 @@ impl TypeCheckTypeBinding<ty::TyFunctionDecl> for TypeBinding<CallPath> {
                     self.type_arguments.to_vec_mut(),
                     EnforceTypeArguments::No,
                     &self.span,
+                    Some(ctx.self_type()),
                 )?;
             }
             TypeArgs::Prefix(_) => {
@@ -306,6 +307,7 @@ impl TypeCheckTypeBinding<ty::TyStructDecl> for TypeBinding<CallPath> {
             self.type_arguments.to_vec_mut(),
             EnforceTypeArguments::No,
             &self.span,
+            Some(ctx.self_type()),
         )?;
         // Insert the new copy into the declaration engine.
         let new_struct_ref = ctx.engines.de().insert(new_copy);
@@ -358,6 +360,7 @@ impl TypeCheckTypeBinding<ty::TyEnumDecl> for TypeBinding<CallPath> {
             self.type_arguments.to_vec_mut(),
             EnforceTypeArguments::No,
             &self.span,
+            Some(ctx.self_type()),
         )?;
         // Insert the new copy into the declaration engine.
         let new_enum_ref = ctx.engines.de().insert(new_copy);

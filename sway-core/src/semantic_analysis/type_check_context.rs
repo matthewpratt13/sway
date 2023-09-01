@@ -261,6 +261,7 @@ impl<'a> TypeCheckContext<'a> {
         type_arguments: &mut [TypeArgument],
         enforce_type_arguments: EnforceTypeArguments,
         call_site_span: &Span,
+        self_type: Option<TypeId>,
     ) -> Result<(), ErrorEmitted>
     where
         T: MonomorphizeHelper + SubstTypes,
@@ -275,6 +276,7 @@ impl<'a> TypeCheckContext<'a> {
             call_site_span,
             self.namespace,
             &mod_path,
+            self_type,
         )
     }
 
