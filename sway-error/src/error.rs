@@ -148,6 +148,8 @@ pub enum CompileError {
         missing_constants: String,
         span: Span,
     },
+    #[error("Associated types are missing from this trait implementation: {missing_types}")]
+    MissingInterfaceSurfaceTypes { missing_types: String, span: Span },
     #[error("Functions are missing from this trait implementation: {missing_functions}")]
     MissingInterfaceSurfaceMethods {
         missing_functions: String,
@@ -725,6 +727,7 @@ impl Spanned for CompileError {
             ConstantNotAPartOfInterfaceSurface { span, .. } => span.clone(),
             TypeNotAPartOfInterfaceSurface { span, .. } => span.clone(),
             MissingInterfaceSurfaceConstants { span, .. } => span.clone(),
+            MissingInterfaceSurfaceTypes { span, .. } => span.clone(),
             MissingInterfaceSurfaceMethods { span, .. } => span.clone(),
             IncorrectNumberOfTypeArguments { span, .. } => span.clone(),
             DoesNotTakeTypeArguments { span, .. } => span.clone(),

@@ -677,9 +677,9 @@ fn type_check_trait_implementation(
         }
 
         if !type_checklist.is_empty() {
-            handler.emit_err(CompileError::MissingInterfaceSurfaceConstants {
+            handler.emit_err(CompileError::MissingInterfaceSurfaceTypes {
                 span: block_span.clone(),
-                missing_constants: type_checklist
+                missing_types: type_checklist
                     .into_keys()
                     .map(|ident| ident.as_str().to_string())
                     .collect::<Vec<_>>()
