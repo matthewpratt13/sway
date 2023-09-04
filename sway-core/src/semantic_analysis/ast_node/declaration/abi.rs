@@ -138,6 +138,10 @@ impl ty::TyAbiDecl {
                     const_name
                 }
                 TraitItem::Type(type_decl) => {
+                    handler.emit_err(CompileError::AssociatedTypeNotSupportedInAbi {
+                        span: type_decl.span.clone(),
+                    });
+
                     let type_decl = ty::TyTraitType::type_check(handler, ctx.by_ref(), type_decl)?;
                     let decl_ref = ctx.engines().de().insert(type_decl.clone());
                     new_interface_surface.push(ty::TyTraitInterfaceItem::Type(decl_ref.clone()));

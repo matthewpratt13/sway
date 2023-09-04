@@ -685,6 +685,8 @@ pub enum CompileError {
         superabi1: String,
         superabi2: String,
     },
+    #[error("Associated types not supported in ABI.")]
+    AssociatedTypeNotSupportedInAbi { span: Span },
     #[error("Cannot call ABI supertrait's method as a contract method: \"{fn_name}\"")]
     AbiSupertraitMethodCallAsContractCall { fn_name: Ident, span: Span },
 }
@@ -867,6 +869,7 @@ impl Spanned for CompileError {
             ContractCallsItsOwnMethod { span } => span.clone(),
             AbiShadowsSuperAbiMethod { span, .. } => span.clone(),
             ConflictingSuperAbiMethods { span, .. } => span.clone(),
+            AssociatedTypeNotSupportedInAbi { span, .. } => span.clone(),
             AbiSupertraitMethodCallAsContractCall { span, .. } => span.clone(),
         }
     }
