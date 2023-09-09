@@ -6,11 +6,10 @@ use ::convert::From;
 use ::hash::{Hash, Hasher};
 use ::option::Option;
 
-
 /// A UTF-8 encoded growable string.
-/// 
+///
 /// # Additional Information
-/// 
+///
 /// WARNING: As this type is meant to be forward compatible with UTF-8, do *not*
 /// add any mutation functionality or unicode input of any kind until `char` is
 /// implemented, codepoints are *not* guaranteed to fall on byte boundaries
@@ -36,7 +35,7 @@ impl String {
     ///     string.push(0u8);
     ///     let bytes = string.as_bytes();
     ///     assert(bytes.len() == 1);
-    ///     assert(bytes.get(0).unwrap() == 0u8);   
+    ///     assert(bytes.get(0).unwrap() == 0u8);
     /// }
     /// ```
     pub fn as_bytes(self) -> Bytes {
@@ -113,9 +112,7 @@ impl String {
     /// }
     /// ```
     pub fn from_ascii(bytes: Bytes) -> Self {
-        Self {
-            bytes,
-        }
+        Self { bytes }
     }
 
     /// Converts a string literal containing ASCII encoded bytes to a `String`
@@ -133,7 +130,7 @@ impl String {
     /// * [String] - A `String` containing the ASCII encoded bytes.
     ///
     /// # Reverts
-    /// 
+    ///
     /// * When `s` is not a string literal.
     ///
     /// # Examples
@@ -147,13 +144,11 @@ impl String {
     /// ```
     pub fn from_ascii_str<S>(s: S) -> Self {
         assert(__is_str_type::<S>());
-        let len =  __size_of_str::<S>();
-        let ptr = asm(s: s) {
-            s: raw_ptr
-        };
-        let slice = asm(parts:(ptr, len)) { parts: raw_slice};
+        let len = __size_of_str::<S>();
+        let ptr = asm(s: s) { s: raw_ptr };
+        let slice = asm(parts: (ptr, len)) { parts: raw_slice };
         Self {
-            bytes: Bytes::from(slice)
+            bytes: Bytes::from(slice),
         }
     }
 
@@ -506,7 +501,7 @@ fn string_test_equal() {
 #[test]
 fn string_test_hash() {
     use ::hash::sha256;
-    
+
     let mut bytes = Bytes::new();
     bytes.push(0u8);
 

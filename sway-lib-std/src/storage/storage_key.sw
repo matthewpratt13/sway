@@ -90,7 +90,7 @@ impl<T> StorageKey<T> {
     ///     };
     ///
     ///     // Writes 42 at the third word of storage slot with key 0x000...0
-    ///     let x = r.write(42); 
+    ///     let x = r.write(42);
     /// }
     /// ```
     #[storage(read, write)]

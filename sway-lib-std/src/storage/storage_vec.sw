@@ -3,7 +3,7 @@ library;
 use ::alloc::alloc;
 use ::assert::assert;
 use ::hash::*;
-use ::option::Option::{self, *};
+use ::option::Option::{*, self};
 use ::storage::storage_api::*;
 use ::storage::storage_key::*;
 
@@ -151,7 +151,7 @@ impl<V> StorageKey<StorageVec<V>> {
     /// # Arguments
     ///
     /// * `index`: [u64] - The index of the vec to remove the item from.
-    /// 
+    ///
     /// # Returns
     ///
     /// * [V] - The element that has been removed at the index.
@@ -384,7 +384,9 @@ impl<V> StorageKey<StorageVec<V>> {
             // shifts all the values up one index
             write::<V>(key, 0, read::<V>(sha256((count, self.field_id)), 0).unwrap());
 
-            if count == 0 { break; }
+            if count == 0 {
+                break;
+            }
             count -= 1;
         }
 

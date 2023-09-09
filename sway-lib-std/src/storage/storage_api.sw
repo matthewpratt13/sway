@@ -1,7 +1,7 @@
 library;
 
 use ::alloc::alloc;
-use ::option::Option::{self, *};
+use ::option::Option::{*, self};
 
 /// Store a stack value in storage. Will not work for heap values.
 ///
@@ -15,7 +15,7 @@ use ::option::Option::{self, *};
 ///
 /// * Reads: `1`
 /// * Writes: `1`
-///  
+///
 /// # Examples
 ///
 /// ```sway
@@ -72,7 +72,7 @@ pub fn write<T>(slot: b256, offset: u64, value: T) {
 /// # Number of Storage Accesses
 ///
 /// * Reads: `1`
-/// 
+///
 /// # Examples
 ///
 /// ```sway
@@ -109,7 +109,7 @@ pub fn read<T>(slot: b256, offset: u64) -> Option<T> {
     }
 }
 
-/// Clear a sequence of consecutive storage slots starting at a some slot. 
+/// Clear a sequence of consecutive storage slots starting at a some slot.
 ///
 /// # Arguments
 ///
@@ -118,7 +118,7 @@ pub fn read<T>(slot: b256, offset: u64) -> Option<T> {
 /// # Returns
 ///
 /// * [bool] - Indicates whether all of the storage slots cleared were previously set.
-/// 
+///
 /// # Number of Storage Accesses
 ///
 /// * Clears: `1`

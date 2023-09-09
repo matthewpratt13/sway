@@ -30,7 +30,7 @@ library;
 /// and the VM Instruction Set for [Memory Allocation](https://fuellabs.github.io/fuel-specs/master/vm/instruction_set.html#aloc-allocate-memory).
 ///
 /// # Arguments
-/// 
+///
 /// * `count`: [u64] - The number of `size_of<T>` bytes to allocate onto the heap.
 ///
 /// # Returns
@@ -41,7 +41,7 @@ library;
 ///
 /// ```sway
 /// use std::alloc::alloc;
-/// 
+///
 /// fn foo() {
 ///     let ptr = alloc::<u64>(2);
 ///     assert(!ptr.is_null());
@@ -54,9 +54,8 @@ pub fn alloc<T>(count: u64) -> raw_ptr {
         ptr: raw_ptr
     }
 }
-
 /// Reallocates the given area of memory.
-/// 
+///
 /// # Arguments
 ///
 /// * `ptr`: [raw_ptr] - The pointer to the area of memory to reallocate.
@@ -64,7 +63,7 @@ pub fn alloc<T>(count: u64) -> raw_ptr {
 /// * `new_count`: [u64] - The number of new `size_of<T>` bytes to allocate. These are set to 0.
 ///
 /// # Returns
-/// 
+///
 /// * [raw_ptr] - The pointer to the newly reallocated memory.
 ///
 /// # Examples
@@ -88,9 +87,9 @@ pub fn realloc<T>(ptr: raw_ptr, count: u64, new_count: u64) -> raw_ptr {
         new_ptr
     } else {
         ptr
-    }
+   
+ }
 }
-
 /// Allocates zeroed memory on the heap in individual bytes.
 ///
 /// # Arguments
@@ -105,7 +104,7 @@ pub fn realloc<T>(ptr: raw_ptr, count: u64, new_count: u64) -> raw_ptr {
 ///
 /// ```sway
 /// use std::alloc::alloc_bytes;
-/// 
+///
 /// fn foo() {
 ///     let ptr = alloc_bytes(2);
 ///     assert(!ptr.is_null());
@@ -118,9 +117,8 @@ pub fn alloc_bytes(count: u64) -> raw_ptr {
         ptr: raw_ptr
     }
 }
-
 /// Reallocates the given area of memory in individual bytes.
-/// 
+///
 /// # Arguments
 ///
 /// * `ptr`: [raw_ptr] - The pointer to the area of memory to reallocate.
@@ -128,7 +126,7 @@ pub fn alloc_bytes(count: u64) -> raw_ptr {
 /// * `new_count`: [u64] - The number of new bytes to allocate. These are set to 0.
 ///
 /// # Returns
-/// 
+///
 /// * [raw_ptr] - The pointer to the newly reallocated memory.
 ///
 /// # Examples
